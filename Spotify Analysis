@@ -1,0 +1,137 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.preprocessing import StandardScaler
+import warnings
+warnings.filterwarnings('ignore')
+
+sns.set_theme(style="whitegrid", palette="muted")
+plt.rcParams['figure.dpi'] = 150
+plt.rcParams['font.size'] = 10
+
+# Load data
+df = pd.read_csv('/mnt/user-data/uploads/songs_normalize.csv')
+df['explicit'] = df['explicit'].map({'True': 1, 'False': 0, True: 1, False: 0}).astype(int)
+
+# Features
+audio_features = ['danceability', 'energy', 'loudness', 'speechiness',
+                  'acousticness', 'instrumentalness', 'liveness', 'valence', 'tempo',
+                  'duration_ms', 'explicit', 'mode', 'key']
+
+X = df[audio_features].dropna()
+y = df.loc[X.index, 'popularity']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Models
+lr = LinearRegression()
+lr.fit(X_train_scaled, y_train)
+lr_pred = lr.predict(X_test_scaled)
+
+rf = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=42, n_jobs=-1)
+rf.fit(X_train, y_train)
+rf_pred = rf.predict(X_test)
+
+lr_cv = cross_val_score(lr, X_train_scaled, y_train, cv=5, scoring='r2')
+rf_cv = cross_val_score(rf, X_train, y_train, cv=5, scoring='r2')
+
+print("=" * 60)
+print("MODEL COMPARISON")
+print("=" * 60)
+for name, pred, cv in [("Linear Regression", lr_pred, lr_cv), ("Random Forest", rf_pred, rf_cv)]:
+    print(f"\n{name}:")
+    print(f"  R²:   {r2_score(y_test, pred):.4f}")
+    print(f"  RMSE: {np.sqrt(mean_squared_error(y_test, pred)):.2f}")
+    print(f"  MAE:  {mean_absolute_error(y_test, pred):.2f}")
+    print(f"  CV R² (5-fold): {cv.mean():.4f} +/- {cv.std():.4f}")
+
+# Fig 1: Predicted vs Actual
+fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+for ax, pred, name in [(axes[0], lr_pred, "Linear Regression"), (axes[1], rf_pred, "Random Forest")]:
+    ax.scatter(y_test, pred, alpha=0.3, s=15, color='#1DB954')
+    ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=1.5)
+    ax.set_xlabel("Actual Popularity")
+    ax.set_ylabel("Predicted Popularity")
+    ax.set_title(f"{name}\nR² = {r2_score(y_test, pred):.3f}")
+fig.suptitle("Predicted vs. Actual Popularity", fontsize=14, fontweight='bold', y=1.02)
+plt.tight_layout()
+plt.savefig('/home/claude/fig1_model_comparison.png', bbox_inches='tight')
+plt.close()
+
+# Fig 2: RF Feature Importance
+importances = pd.Series(rf.feature_importances_, index=audio_features).sort_values()
+fig, ax = plt.subplots(figsize=(8, 6))
+importances.plot(kind='barh', color='#1DB954', ax=ax)
+ax.set_xlabel("Feature Importance (MDI)")
+ax.set_title("Random Forest — Feature Importance", fontsize=13, fontweight='bold')
+plt.tight_layout()
+plt.savefig('/home/claude/fig2_feature_importance.png', bbox_inches='tight')
+plt.close()
+
+# Fig 3: LR Coefficients
+coefs = pd.Series(lr.coef_, index=audio_features).sort_values()
+colors = ['#e74c3c' if c < 0 else '#1DB954' for c in coefs]
+fig, ax = plt.subplots(figsize=(8, 6))
+coefs.plot(kind='barh', color=colors, ax=ax)
+ax.set_xlabel("Standardized Coefficient")
+ax.set_title("Linear Regression — Feature Coefficients", fontsize=13, fontweight='bold')
+ax.axvline(0, color='black', lw=0.8)
+plt.tight_layout()
+plt.savefig('/home/claude/fig3_lr_coefficients.png', bbox_inches='tight')
+plt.close()
+
+# Fig 4: Feature Trends Over Time
+trend_features = ['danceability', 'energy', 'valence', 'acousticness', 'speechiness', 'loudness']
+yearly = df.groupby('year')[trend_features].mean()
+
+fig, axes = plt.subplots(2, 3, figsize=(14, 8))
+for ax, feat in zip(axes.flatten(), trend_features):
+    ax.plot(yearly.index, yearly[feat], color='#1DB954', lw=2, marker='o', markersize=4)
+    z = np.polyfit(yearly.index, yearly[feat], 1)
+    ax.plot(yearly.index, np.polyval(z, yearly.index), 'r--', alpha=0.7, lw=1)
+    ax.set_title(feat.capitalize(), fontweight='bold')
+    ax.set_xlabel("Year")
+    direction = "+" if z[0] > 0 else ""
+    ax.annotate(f"Trend: {direction}{z[0]:.4f}/yr", xy=(0.05, 0.92),
+                xycoords='axes fraction', fontsize=8, color='gray')
+fig.suptitle("Audio Feature Trends: 2000-2019", fontsize=14, fontweight='bold', y=1.02)
+plt.tight_layout()
+plt.savefig('/home/claude/fig4_feature_trends.png', bbox_inches='tight')
+plt.close()
+
+# Fig 5: Popularity Over Time
+fig, ax = plt.subplots(figsize=(10, 5))
+yearly_pop = df.groupby('year')['popularity'].agg(['mean', 'median', 'std'])
+ax.fill_between(yearly_pop.index, yearly_pop['mean'] - yearly_pop['std'],
+                yearly_pop['mean'] + yearly_pop['std'], alpha=0.2, color='#1DB954')
+ax.plot(yearly_pop.index, yearly_pop['mean'], color='#1DB954', lw=2, label='Mean')
+ax.plot(yearly_pop.index, yearly_pop['median'], color='#191414', lw=2, ls='--', label='Median')
+ax.set_xlabel("Year")
+ax.set_ylabel("Popularity Score")
+ax.set_title("Popularity Distribution Over Time (2000-2019)", fontsize=13, fontweight='bold')
+ax.legend()
+plt.tight_layout()
+plt.savefig('/home/claude/fig5_popularity_trend.png', bbox_inches='tight')
+plt.close()
+
+# Fig 6: Correlation Heatmap
+fig, ax = plt.subplots(figsize=(10, 8))
+corr = df[audio_features + ['popularity']].corr()
+mask = np.triu(np.ones_like(corr, dtype=bool))
+sns.heatmap(corr, mask=mask, annot=True, fmt='.2f', cmap='RdYlGn', center=0,
+            ax=ax, square=True, linewidths=0.5, cbar_kws={"shrink": 0.8})
+ax.set_title("Feature Correlation Matrix", fontsize=13, fontweight='bold')
+plt.tight_layout()
+plt.savefig('/home/claude/fig6_correlation.png', bbox_inches='tight')
+plt.close()
+
+print("\nAll figures saved.")
