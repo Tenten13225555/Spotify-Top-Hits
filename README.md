@@ -1,4 +1,4 @@
-# Spotify-Scientific-Data-Analysis
+# Listener Trends Analytics
 
 Spotify is a digital music streaming service that provides users access to over 82 million songs, podcasts and audio books. The app was developed by Daniel Ek and Martin Lorenzton in 2006. This app has become a family name over the years and boasts over 457 million subscribers as of 2022, rivaling SoundCloud and Apple Music. 
 
