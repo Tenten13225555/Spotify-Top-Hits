@@ -8,13 +8,7 @@ Spotify is a perfect dataset to measure the popularity of songs against various 
 
 I will be creating an exploratory analysis by creating data visualizations and conducting statistical analyses to investigate the relationship between the use of non-traditional musical elements and the popularity of Spotify hits from 2000 to 2019.
 
-References
+## References
 
 Source data - https://www.kaggle.com/datasets/paradisejoy/top-hits-spotify-from-20002019
 
-Image data - spotify.png, GettyImages_1140668438_green.0.jpg
-
-Pandas for data manipulation and data viz
-Matplotlib for data manipuation and data viz
-Numpy for data manipulation
-Seaborn for data manipulation
